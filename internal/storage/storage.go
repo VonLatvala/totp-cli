@@ -18,14 +18,14 @@ import (
 )
 
 const (
-	dataLengthHead              = 13
+	dataLengthHead			  = 13
 	storageDirectoryPermissions = 0o700
-	storageFilePermissions      = 0o600
+	storageFilePermissions	  = 0o600
 )
 
 // Storage structure represents the credential storage.
 type Storage struct {
-	File     string `json:"-"`
+	File	 string `json:"-"`
 	Password []byte `json:"-"`
 
 	Namespaces []*Namespace
@@ -154,16 +154,28 @@ func PrepareStorage() (*Storage, error) {
 		return nil, err
 	}
 
+	passwordFile := os.Getenv("TOTP_PASSWORD_FILE")
+
+	password := ""
+	if _, err := os.Stat(passwordFile); err == nil {
+		if dat, err := os.ReadFile(passwordFile); err == nil {
+			password = string(dat)
+		}
+	}
+
 	if storage == nil {
 		term := terminal.New(os.Stdin, os.Stdout, os.Stderr)
 
-		password, termErr := term.Hidden("Password:")
-		if termErr != nil {
-			return nil, BackendError{Message: err.Error()}
+		if password == "" {
+			var termErr error
+			password, termErr = term.Hidden("Password:")
+			if termErr != nil {
+				return nil, BackendError{Message: err.Error()}
+			}
 		}
 
 		storage = &Storage{
-			File:     credentialFile,
+			File:	 credentialFile,
 			Password: security.UnsecureSHA1(password),
 		}
 	}
@@ -175,8 +187,19 @@ func PrepareStorage() (*Storage, error) {
 
 func initStorage() (string, *Storage, error) {
 	var credentialFile string
+	var passwordFile string
+	var password string
 
 	credentialFile = os.Getenv("TOTP_CLI_CREDENTIAL_FILE")
+	passwordFile = os.Getenv("TOTP_PASSWORD_FILE")
+
+	password = ""
+
+	if _, err := os.Stat(passwordFile); err == nil {
+		if dat, err := os.ReadFile(passwordFile); err == nil {
+			password = string(dat)
+		}
+	}
 
 	if credentialFile == "" {
 		currentUser, err := user.Current()
@@ -205,17 +228,20 @@ func initStorage() (string, *Storage, error) {
 
 	term := terminal.New(os.Stdin, os.Stdout, os.Stderr)
 
-	password, err := term.Hidden("Your Password (do not forget it):")
-	if err != nil {
-		return "", nil, BackendError{Message: err.Error()}
+	if password == "" {
+		termPassword, err := term.Hidden("Your Password (do not forget it):")
+		if err != nil {
+			return "", nil, BackendError{Message: err.Error()}
+		}
+		password = termPassword
 	}
 
 	storage := &Storage{
-		File:     credentialFile,
+		File:	 credentialFile,
 		Password: security.UnsecureSHA1(password),
 	}
 
-	err = storage.Save()
+	err := storage.Save()
 
 	return credentialFile, storage, err
 }
